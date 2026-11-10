@@ -1,5 +1,7 @@
 package me.hanhyur.notify.api.common.web;
 
+import me.hanhyur.notify.api.support.PostgresTestConfiguration;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,7 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @ExtendWith(OutputCaptureExtension.class)
-@Import(RequestTracingIntegrationTest.ProbeController.class)
+@Import({RequestTracingIntegrationTest.ProbeController.class, PostgresTestConfiguration.class})
 public class RequestTracingIntegrationTest {
 
     private static final String MARKER = "request-tracing-check";
