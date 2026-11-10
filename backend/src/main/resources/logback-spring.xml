@@ -19,7 +19,7 @@
               class="ch.qos.logback.core.ConsoleAppender">
         <target>System.out</target>
         <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
-            <pattern>%d %level [${APP_NAME}] %logger - %msg%n</pattern>
+            <pattern>%d %level [${APP_NAME}] [requestId=%X{requestId:-none}] %logger - %msg%n</pattern>
             <charset>UTF-8</charset>
         </encoder>
     </appender>
