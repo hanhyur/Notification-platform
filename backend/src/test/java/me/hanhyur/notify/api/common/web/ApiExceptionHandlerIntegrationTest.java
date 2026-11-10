@@ -1,5 +1,7 @@
 package me.hanhyur.notify.api.common.web;
 
+import me.hanhyur.notify.api.support.PostgresTestConfiguration;
+
 import jakarta.validation.Valid;
 import me.hanhyur.notify.api.notification.dto.NotificationCreateRequest;
 import org.junit.jupiter.api.AfterEach;
@@ -35,7 +37,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Import(ApiExceptionHandlerIntegrationTest.ProbeController.class)
+@Import({ApiExceptionHandlerIntegrationTest.ProbeController.class, PostgresTestConfiguration.class})
 class ApiExceptionHandlerIntegrationTest {
 
     private static final String PATH = "/_test/problem";

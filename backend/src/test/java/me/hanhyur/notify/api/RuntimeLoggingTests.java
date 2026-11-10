@@ -1,5 +1,7 @@
 package me.hanhyur.notify.api;
 
+import me.hanhyur.notify.api.support.PostgresTestConfiguration;
+
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
@@ -11,11 +13,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
+@Import(PostgresTestConfiguration.class)
 @ActiveProfiles("test")
 @ExtendWith(OutputCaptureExtension.class)
 public class RuntimeLoggingTests {
