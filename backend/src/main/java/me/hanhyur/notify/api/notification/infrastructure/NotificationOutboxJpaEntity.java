@@ -41,13 +41,27 @@ public class NotificationOutboxJpaEntity {
 
     public static NotificationOutboxJpaEntity fromDomain(NotificationOutboxEvent event) {
         Objects.requireNonNull(event, "Outbox 이벤트는 필수입니다.");
+
         NotificationOutboxJpaEntity entity = new NotificationOutboxJpaEntity();
+
         entity.eventId = event.eventId();
         entity.notificationId = event.notificationId();
         entity.dispatchId = event.dispatchId();
         entity.generation = event.generation();
         entity.occurredAt = event.occurredAt();
         entity.availableAt = event.availableAt();
+
         return entity;
+    }
+
+    public NotificationOutboxEvent toDomain() {
+        return new NotificationOutboxEvent(
+                eventId,
+                notificationId,
+                dispatchId,
+                generation,
+                occurredAt,
+                availableAt
+        );
     }
 }
