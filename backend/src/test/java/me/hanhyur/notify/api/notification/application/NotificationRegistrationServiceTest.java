@@ -36,7 +36,8 @@ class NotificationRegistrationServiceTest {
                             Clock.fixed(NOW, ZoneOffset.UTC),
                             new NotificationSchedulePolicy()
                     ),
-                    repository
+                    repository,
+                    event -> {}
             );
 
     @Test

@@ -59,6 +59,7 @@ class NotificationRegistrationServiceIntegrationTest {
     @AfterEach
     void clearNotifications() {
         repository.failAfterInsert = false;
+        jdbc.sql("DELETE FROM notification_outbox").update();
         jdbc.sql("DELETE FROM notifications").update();
     }
 

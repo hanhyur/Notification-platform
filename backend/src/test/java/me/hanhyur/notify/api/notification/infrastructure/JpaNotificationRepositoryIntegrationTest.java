@@ -50,6 +50,7 @@ class JpaNotificationRepositoryIntegrationTest {
 
     @AfterEach
     void clearNotifications() {
+        jdbc.sql("DELETE FROM notification_outbox").update();
         jdbc.sql("DELETE FROM notifications").update();
     }
 

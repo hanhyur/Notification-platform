@@ -46,6 +46,7 @@ class DatabaseMigrationIntegrationTest {
 
     @AfterEach
     void clearNotifications() {
+        jdbc.sql("DELETE FROM notification_outbox").update();
         jdbc.sql("DELETE FROM notifications").update();
     }
 
@@ -60,12 +61,15 @@ class DatabaseMigrationIntegrationTest {
     }
 
     @Test
-    void appliesInitialMigration() {
+    void appliesBothSchemaMigrations() {
         assertNotNull(flyway.info().current());
-        assertEquals("1", flyway.info().current().getVersion().getVersion());
-        assertEquals(1, flyway.info().applied().length);
+        assertEquals("2", flyway.info().current().getVersion().getVersion());
+        assertEquals(2, flyway.info().applied().length);
         assertTrue(jdbc.sql(
                 "SELECT to_regclass('public.notifications') IS NOT NULL"
+        ).query(Boolean.class).single());
+        assertTrue(jdbc.sql(
+                "SELECT to_regclass('public.notification_outbox') IS NOT NULL"
         ).query(Boolean.class).single());
         flyway.validate();
     }
