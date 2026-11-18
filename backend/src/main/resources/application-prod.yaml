@@ -1,4 +1,6 @@
 spring:
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}

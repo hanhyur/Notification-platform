@@ -1,6 +1,11 @@
 spring:
   application:
     name: backend
+  kafka:
+    producer:
+      acks: all
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
   jpa:
     open-in-view: false
     hibernate:
@@ -9,3 +14,9 @@ spring:
       hibernate:
         jdbc:
           time_zone: UTC
+
+notification:
+  outbox:
+    kafka:
+      topic: notification.dispatch.v1
+      ack-timeout: 10s

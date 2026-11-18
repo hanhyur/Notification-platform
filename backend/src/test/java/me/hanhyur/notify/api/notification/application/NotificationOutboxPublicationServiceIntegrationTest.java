@@ -220,6 +220,7 @@ class NotificationOutboxPublicationServiceIntegrationTest {
         }
 
         @Bean
+        @Primary
         RecordingPublisher recordingPublisher() {
             return new RecordingPublisher();
         }
@@ -233,6 +234,7 @@ class NotificationOutboxPublicationServiceIntegrationTest {
         }
 
         @Bean
+        @Primary
         NotificationOutboxPublicationService publicationService(
                 NotificationOutboxPublicationRepository repository,
                 RecordingPublisher publisher
