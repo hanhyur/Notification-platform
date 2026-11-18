@@ -51,7 +51,7 @@ public class KafkaOutboxPublisher implements NotificationOutboxPublisher {
 
     private void awaitAcknowledgement(CompletableFuture<SendResult<String, String>> result) {
         try {
-            result.get(ackTimeout.toMillis(), TimeUnit.MILLISECONDS);
+            result.get(TimeUnit.NANOSECONDS.convert(ackTimeout), TimeUnit.NANOSECONDS);
         } catch (ExecutionException e) {
             throw new RuntimeException(e.getCause());
         } catch (TimeoutException e) {
