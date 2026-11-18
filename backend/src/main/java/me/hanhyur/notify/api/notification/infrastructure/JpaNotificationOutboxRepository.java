@@ -36,8 +36,6 @@ public class JpaNotificationOutboxRepository
             throw new IllegalArgumentException("조회 건수는 1 이상이어야 합니다.");
         }
 
-        // TODO 1: 미발행이며 availableAt이 now 이하인 이벤트만 DB에서 조회하세요.
-        // availableAt, eventId 오름차순 정렬과 limit을 쿼리에 적용하고 도메인 목록을 반환하세요.
         List<NotificationOutboxJpaEntity> entities =
                 entityManager.createQuery("""
                                 select e from NotificationOutboxJpaEntity e
