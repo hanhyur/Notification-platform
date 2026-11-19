@@ -15,18 +15,36 @@
                     source="logging.level.me.hanhyur.notify"
                     defaultValue="INFO"/>
 
+    <property name="APP_LOG_PATTERN"
+              value="%d %level [${APP_NAME}] [requestId=%X{requestId:-none}] %logger - %msg%n"/>
+
     <appender name="CONSOLE"
               class="ch.qos.logback.core.ConsoleAppender">
         <target>System.out</target>
         <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
-            <pattern>%d %level [${APP_NAME}] [requestId=%X{requestId:-none}] %logger - %msg%n</pattern>
+            <pattern>${APP_LOG_PATTERN}</pattern>
             <charset>UTF-8</charset>
         </encoder>
     </appender>
 
     <logger name="me.hanhyur.notify" level="${APP_LOG_LEVEL}"/>
 
-    <root level="${ROOT_LOG_LEVEL}">
-        <appender-ref ref="CONSOLE"/>
-    </root>
+    <springProfile name="prod">
+        <property name="FILE_LOG_CHARSET" value="${FILE_LOG_CHARSET:-UTF-8}"/>
+        <property name="FILE_LOG_THRESHOLD" value="${FILE_LOG_THRESHOLD:-TRACE}"/>
+        <property name="FILE_LOG_PATTERN" value="${APP_LOG_PATTERN}"/>
+
+        <include resource="org/springframework/boot/logging/logback/file-appender.xml"/>
+
+        <root level="${ROOT_LOG_LEVEL}">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="FILE"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="!prod">
+        <root level="${ROOT_LOG_LEVEL}">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
 </configuration>

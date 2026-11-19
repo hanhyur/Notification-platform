@@ -3,5 +3,7 @@
 !.env.example
 **/build/
 **/.gradle/
+**/logs/notification-platform.log
+**/logs/notification-platform.log.*.gz
 .idea/
 *.iml
