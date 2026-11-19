@@ -17,6 +17,10 @@ spring:
 
 notification:
   outbox:
+    polling:
+      enabled: false
+      fixed-delay: 5s
+      batch-size: 50
     kafka:
       topic: notification.dispatch.v1
       ack-timeout: 10s
