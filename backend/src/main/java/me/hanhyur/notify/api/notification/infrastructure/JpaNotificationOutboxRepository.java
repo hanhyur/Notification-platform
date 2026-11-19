@@ -4,6 +4,7 @@ import jakarta.persistence.EntityManager;
 import me.hanhyur.notify.api.notification.domain.NotificationOutboxEvent;
 import me.hanhyur.notify.api.notification.domain.NotificationOutboxPublicationRepository;
 import me.hanhyur.notify.api.notification.domain.NotificationOutboxRepository;
+import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,9 +16,11 @@ public class JpaNotificationOutboxRepository
         implements NotificationOutboxRepository, NotificationOutboxPublicationRepository {
 
     private final EntityManager entityManager;
+    private final OutboxEventQueries events;
 
-    public JpaNotificationOutboxRepository(EntityManager entityManager) {
+    public JpaNotificationOutboxRepository(EntityManager entityManager, OutboxEventQueries events) {
         this.entityManager = Objects.requireNonNull(entityManager, "엔티티 매니저는 필수입니다.");
+        this.events = Objects.requireNonNull(events);
     }
 
     @Override
@@ -36,18 +39,9 @@ public class JpaNotificationOutboxRepository
             throw new IllegalArgumentException("조회 건수는 1 이상이어야 합니다.");
         }
 
-        List<NotificationOutboxJpaEntity> entities =
-                entityManager.createQuery("""
-                                select e from NotificationOutboxJpaEntity e
-                                where e.publishedAt is null
-                                and e.availableAt <= :now
-                                order by e.availableAt asc, e.eventId asc
-                                """, NotificationOutboxJpaEntity.class)
-                        .setParameter("now", now)
-                        .setMaxResults(limit)
-                        .getResultList();
-
-        return entities.stream()
+        return events.findByPublishedAtIsNullAndAvailableAtLessThanEqualOrderByAvailableAtAscEventIdAsc(
+                        now, Limit.of(limit))
+                .stream()
                 .map(NotificationOutboxJpaEntity::toDomain)
                 .toList();
     }
