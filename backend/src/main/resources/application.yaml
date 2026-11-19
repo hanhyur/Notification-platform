@@ -16,6 +16,10 @@ spring:
           time_zone: UTC
 
 notification:
+  dispatch:
+    consumer:
+      enabled: false
+      group-id: notification-dispatch-worker
   outbox:
     polling:
       enabled: false
