@@ -1,5 +1,8 @@
 package me.hanhyur.notify.api.notification.infrastructure;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import me.hanhyur.notify.api.notification.domain.Channel;
 import me.hanhyur.notify.api.notification.domain.Notification;
 import me.hanhyur.notify.api.notification.domain.NotificationDeliveryResultRepository;
@@ -13,15 +16,20 @@ import me.hanhyur.notify.api.notification.domain.ProviderResult;
 import me.hanhyur.notify.api.notification.domain.ProviderResult.Outcome;
 import me.hanhyur.notify.api.support.PostgresTestConfiguration;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Duration;
@@ -32,7 +40,9 @@ import java.util.UUID;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
@@ -220,6 +230,80 @@ class JpaNotificationDeliveryResultRepositoryIntegrationTest {
         assertEquals(notification.status(), attempt.status());
         assertEquals(notification.updated(), attempt.finished());
         assertEquals(2, notification.version());
+    }
+
+    @Nested
+    class DeliveryResultLogs {
+
+        private final Logger logger = (Logger) LoggerFactory.getLogger(DeliveryResultLogger.class);
+        private final ListAppender<ILoggingEvent> entries = new ListAppender<>();
+
+        @BeforeEach
+        void captureLogs() {
+            entries.start();
+            logger.addAppender(entries);
+        }
+
+        @AfterEach
+        void releaseLogs() {
+            logger.detachAppender(entries);
+            entries.stop();
+        }
+
+        @ParameterizedTest
+        @CsvSource({
+                "ACCEPTED, ACCEPTED, INFO",
+                "TRANSIENT_REJECTION, RETRY_WAIT, WARN",
+                "PERMANENT_REJECTION, FAILED, WARN",
+                "UNKNOWN, UNKNOWN, WARN"
+        })
+        void logsOnlyTheCommittedStatusAndPublicIdentifiersOnce(Outcome outcome, String status, String level) {
+            var event = registeredEvent();
+            assertTrue(claims.tryClaim(event, START));
+            var reply = outcome == Outcome.ACCEPTED ? accepted(event) : new ProviderResult(outcome, null);
+            var logCountBeforeCommit = new AtomicInteger(-1);
+
+            new TransactionTemplate(transactions).executeWithoutResult(tx -> {
+                results.finish(event, reply, FINISH);
+                tx.flush();
+                assertEquals(status, notification(event).status());
+                assertTrue(entries.list.isEmpty());
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void beforeCompletion() {
+                        logCountBeforeCommit.set(entries.list.size());
+                    }
+                });
+            });
+
+            assertEquals(0, logCountBeforeCommit.get());
+            assertEquals(1, entries.list.size());
+            var entry = entries.list.getFirst();
+            assertEquals(level, entry.getLevel().toString());
+            assertThat(entry.getFormattedMessage().split(" ")).containsExactlyInAnyOrder(
+                    "delivery_result_recorded", "notificationId=" + event.notificationId(),
+                    "dispatchId=" + event.dispatchId(), "eventId=" + event.eventId(), "status=" + status);
+            assertNull(entry.getThrowableProxy());
+
+            results.finish(event, reply, FINISH.plusSeconds(5));
+            assertEquals(1, entries.list.size());
+        }
+
+        @Test
+        void logsNothingWhenTheResultIsRolledBack() {
+            var event = registeredEvent();
+            assertTrue(claims.tryClaim(event, START));
+
+            new TransactionTemplate(transactions).executeWithoutResult(tx -> {
+                results.finish(event, accepted(event), FINISH);
+                tx.flush();
+                assertEquals("ACCEPTED", notification(event).status());
+                tx.setRollbackOnly();
+            });
+
+            assertEquals("SENDING", notification(event).status());
+            assertTrue(entries.list.isEmpty());
+        }
     }
 
     private NotificationOutboxEvent registeredEvent() {
