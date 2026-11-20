@@ -63,8 +63,8 @@ class DatabaseMigrationIntegrationTest {
     @Test
     void appliesAllSchemaMigrations() {
         assertNotNull(flyway.info().current());
-        assertEquals("3", flyway.info().current().getVersion().getVersion());
-        assertEquals(3, flyway.info().applied().length);
+        assertEquals("4", flyway.info().current().getVersion().getVersion());
+        assertEquals(4, flyway.info().applied().length);
         assertTrue(jdbc.sql(
                 "SELECT to_regclass('public.notifications') IS NOT NULL"
         ).query(Boolean.class).single());

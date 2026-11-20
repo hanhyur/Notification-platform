@@ -1,6 +1,6 @@
 package me.hanhyur.notify.api.notification.infrastructure;
 
-import me.hanhyur.notify.api.notification.domain.NotificationDispatchClaimRepository;
+import me.hanhyur.notify.api.notification.application.NotificationDeliveryService;
 import me.hanhyur.notify.api.notification.domain.NotificationOutboxEvent;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.Test;
@@ -20,20 +20,18 @@ import static org.mockito.Mockito.*;
 class KafkaDispatchListenerTest {
 
     private static final Instant NOW = Instant.parse("2026-11-19T09:30:00Z");
-    private final NotificationDispatchClaimRepository claims = mock();
+    private final NotificationDeliveryService delivery = mock();
     private final JsonMapper json = JsonMapper.builder().build();
-    private final KafkaDispatchListener listener = new KafkaDispatchListener(json, claims, Clock.fixed(NOW, ZoneOffset.UTC));
+    private final KafkaDispatchListener listener = new KafkaDispatchListener(json, delivery, Clock.fixed(NOW, ZoneOffset.UTC));
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    void submitsOneClaimForAnEventDueNow(boolean won) {
+    @Test
+    void dispatchesAnEventDueNow() {
         NotificationOutboxEvent event = eventDueAt(NOW);
-        when(claims.tryClaim(event, NOW)).thenReturn(won);
 
         listener.receive(record(event.notificationId().toString(), json.writeValueAsString(event)));
 
-        verify(claims).tryClaim(event, NOW);
-        verifyNoMoreInteractions(claims);
+        verify(delivery).deliver(event, NOW);
+        verifyNoMoreInteractions(delivery);
     }
 
     @ParameterizedTest
@@ -42,7 +40,7 @@ class KafkaDispatchListenerTest {
     void rejectsAnEventWithTheWrongKey(String key) {
         assertThrows(IllegalArgumentException.class,
                 () -> listener.receive(record(key, json.writeValueAsString(eventDueAt(NOW)))));
-        verifyNoInteractions(claims);
+        verifyNoInteractions(delivery);
     }
 
     @ParameterizedTest
@@ -53,7 +51,7 @@ class KafkaDispatchListenerTest {
                 () -> listener.receive(record(UUID.randomUUID().toString(), value)));
         assertFalse(failure.getMessage().contains("private-payload-marker"));
         assertNull(failure.getCause());
-        verifyNoInteractions(claims);
+        verifyNoInteractions(delivery);
     }
 
     @Test
@@ -62,7 +60,7 @@ class KafkaDispatchListenerTest {
         var record = record(event.notificationId().toString(), json.writeValueAsString(event));
 
         assertThrows(IllegalStateException.class, () -> listener.receive(record));
-        verifyNoInteractions(claims);
+        verifyNoInteractions(delivery);
     }
 
     @Test
@@ -70,11 +68,11 @@ class KafkaDispatchListenerTest {
         NotificationOutboxEvent event = eventDueAt(NOW.minusSeconds(1));
         var record = record(event.notificationId().toString(), json.writeValueAsString(event));
         var failure = new IllegalStateException("선점 저장 실패");
-        when(claims.tryClaim(event, NOW)).thenThrow(failure);
+        doThrow(failure).when(delivery).deliver(event, NOW);
 
         assertSame(failure, assertThrows(IllegalStateException.class, () -> listener.receive(record)));
-        verify(claims).tryClaim(event, NOW);
-        verifyNoMoreInteractions(claims);
+        verify(delivery).deliver(event, NOW);
+        verifyNoMoreInteractions(delivery);
     }
 
     private NotificationOutboxEvent eventDueAt(Instant availableAt) {

@@ -6,6 +6,11 @@ spring:
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
 
+notification:
+  dispatch:
+    provider:
+      endpoint: ${NOTIFICATION_DISPATCH_PROVIDER_ENDPOINT:http://127.0.0.1:8091/deliveries}
+
 logging:
   level:
     root: info

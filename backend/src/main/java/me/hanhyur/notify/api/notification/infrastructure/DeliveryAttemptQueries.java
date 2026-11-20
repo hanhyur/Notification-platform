@@ -9,5 +9,8 @@ interface DeliveryAttemptQueries extends Repository<NotificationDeliveryAttemptJ
 
     Optional<AttemptNumber> findFirstByNotificationIdOrderByAttemptNoDesc(UUID notificationId);
 
+    Optional<NotificationDeliveryAttemptJpaEntity> findByNotificationIdAndDispatchIdAndStatus(
+            UUID notificationId, UUID dispatchId, String status);
+
     record AttemptNumber(int attemptNo) {}
 }
