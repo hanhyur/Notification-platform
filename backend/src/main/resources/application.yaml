@@ -17,6 +17,9 @@ spring:
 
 notification:
   dispatch:
+    provider:
+      connect-timeout: 2s
+      response-timeout: 5s
     consumer:
       enabled: false
       group-id: notification-dispatch-worker

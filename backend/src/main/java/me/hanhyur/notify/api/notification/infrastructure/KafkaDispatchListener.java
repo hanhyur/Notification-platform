@@ -1,6 +1,6 @@
 package me.hanhyur.notify.api.notification.infrastructure;
 
-import me.hanhyur.notify.api.notification.domain.NotificationDispatchClaimRepository;
+import me.hanhyur.notify.api.notification.application.NotificationDeliveryService;
 import me.hanhyur.notify.api.notification.domain.NotificationOutboxEvent;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -17,13 +17,13 @@ import java.util.Objects;
 public class KafkaDispatchListener {
 
     private final ObjectReader events;
-    private final NotificationDispatchClaimRepository claims;
+    private final NotificationDeliveryService delivery;
     private final Clock clock;
 
-    public KafkaDispatchListener(JsonMapper json, NotificationDispatchClaimRepository claims, Clock clock) {
+    public KafkaDispatchListener(JsonMapper json, NotificationDeliveryService delivery, Clock clock) {
         this.events = json.readerFor(NotificationOutboxEvent.class)
                 .with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
-        this.claims = Objects.requireNonNull(claims);
+        this.delivery = Objects.requireNonNull(delivery);
         this.clock = Objects.requireNonNull(clock);
     }
 
@@ -42,7 +42,7 @@ public class KafkaDispatchListener {
             throw new IllegalStateException("발송 가능한 시각이 아닙니다.");
         }
 
-        claims.tryClaim(event, now);
+        delivery.deliver(event, now);
     }
 
     private NotificationOutboxEvent decode(String payload) {

@@ -7,11 +7,14 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import me.hanhyur.notify.api.notification.domain.Channel;
+import me.hanhyur.notify.api.notification.domain.DeliveryDecision;
 import me.hanhyur.notify.api.notification.domain.Notification;
+import me.hanhyur.notify.api.notification.domain.NotificationOutboxEvent;
 import me.hanhyur.notify.api.notification.domain.NotificationStatus;
 
 import java.time.Instant;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 @Entity
@@ -54,6 +57,18 @@ public class NotificationJpaEntity {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    @Column(name = "accepted_at")
+    private Instant acceptedAt;
+
+    @Column(name = "completed_at")
+    private Instant completedAt;
+
+    @Column(name = "last_error_code", length = 100)
+    private String lastErrorCode;
+
+    @Column(name = "error_summary", length = 500)
+    private String errorSummary;
+
     @Column(name = "generation", nullable = false)
     private int generation;
 
@@ -64,6 +79,33 @@ public class NotificationJpaEntity {
     private long version;
 
     protected NotificationJpaEntity() {
+    }
+
+    boolean isSending(NotificationOutboxEvent event) {
+        return status == NotificationStatus.SENDING && currentDispatchId.equals(event.dispatchId())
+                && generation == event.generation();
+    }
+
+    int retryCount() {
+        return retryCount;
+    }
+
+    Optional<NotificationOutboxEvent> finish(DeliveryDecision decision, Instant now) {
+        status = decision.status();
+        acceptedAt = status == NotificationStatus.ACCEPTED ? now : null;
+        completedAt = status == NotificationStatus.ACCEPTED || status == NotificationStatus.FAILED ? now : null;
+        lastErrorCode = decision.errorCode();
+        errorSummary = decision.errorSummary();
+        updatedAt = now;
+        version++;
+        if (decision.retryDelay() == null) {
+            return Optional.empty();
+        }
+
+        currentDispatchId = UUID.randomUUID();
+        retryCount++;
+        return Optional.of(new NotificationOutboxEvent(UUID.randomUUID(), notificationId, currentDispatchId,
+                generation, now, now.plus(decision.retryDelay())));
     }
 
     public static NotificationJpaEntity fromDomain(Notification notification) {
