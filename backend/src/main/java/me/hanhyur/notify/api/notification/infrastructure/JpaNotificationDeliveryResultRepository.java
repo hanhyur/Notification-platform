@@ -7,6 +7,7 @@ import me.hanhyur.notify.api.notification.domain.NotificationDeliveryResultRepos
 import me.hanhyur.notify.api.notification.domain.NotificationOutboxEvent;
 import me.hanhyur.notify.api.notification.domain.NotificationOutboxRepository;
 import me.hanhyur.notify.api.notification.domain.ProviderResult;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,12 +19,16 @@ public class JpaNotificationDeliveryResultRepository implements NotificationDeli
     private final EntityManager entityManager;
     private final DeliveryAttemptQueries attempts;
     private final NotificationOutboxRepository outbox;
+    private final ApplicationEventPublisher events;
 
-    public JpaNotificationDeliveryResultRepository(EntityManager entityManager, DeliveryAttemptQueries attempts,
-                                                  NotificationOutboxRepository outbox) {
+    public JpaNotificationDeliveryResultRepository(
+            EntityManager entityManager, DeliveryAttemptQueries attempts,
+            NotificationOutboxRepository outbox, ApplicationEventPublisher events
+    ) {
         this.entityManager = entityManager;
         this.attempts = attempts;
         this.outbox = outbox;
+        this.events = events;
     }
 
     @Override
@@ -43,6 +48,8 @@ public class JpaNotificationDeliveryResultRepository implements NotificationDeli
         var decision = DeliveryDecision.decide(result.outcome(), notification.retryCount());
         Instant finishedAt = attempt.get().finish(decision, result.reference(), now);
         notification.finish(decision, finishedAt).ifPresent(outbox::insert);
+        events.publishEvent(new DeliveryResultRecorded(
+                event.notificationId(), event.dispatchId(), event.eventId(), decision.status()));
     }
 
     private boolean matchesStoredEvent(NotificationOutboxEvent event) {
