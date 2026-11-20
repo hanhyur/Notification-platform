@@ -1,11 +1,18 @@
 package me.hanhyur.notify.api.notification.application;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import me.hanhyur.notify.api.notification.domain.NotificationOutboxEvent;
 import me.hanhyur.notify.api.notification.domain.NotificationOutboxPublicationRepository;
 import me.hanhyur.notify.api.notification.domain.NotificationOutboxPublisher;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.LoggerFactory;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -19,6 +26,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 
 class NotificationOutboxPublicationServiceTest {
@@ -31,6 +39,20 @@ class NotificationOutboxPublicationServiceTest {
     private final AdjustableClock clock = new AdjustableClock(NOW);
     private final NotificationOutboxPublicationService service =
             new NotificationOutboxPublicationService(repository, publisher, clock);
+    private final Logger logger = (Logger) LoggerFactory.getLogger(NotificationOutboxPublicationService.class);
+    private final ListAppender<ILoggingEvent> entries = new ListAppender<>();
+
+    @BeforeEach
+    void captureLogs() {
+        entries.start();
+        logger.addAppender(entries);
+    }
+
+    @AfterEach
+    void releaseLogs() {
+        logger.detachAppender(entries);
+        entries.stop();
+    }
 
     @Test
     void returnsZeroForAnEmptyBatchAndUsesTheRequestedTimeAndLimit() {
@@ -86,6 +108,7 @@ class NotificationOutboxPublicationServiceTest {
 
         assertEquals(List.of(alreadyCompletedByAnotherWorker, newlyCompleted), publisher.attempts);
         assertEquals(2, repository.completionAttempts.size());
+        assertOnlyPublicationLog(newlyCompleted);
     }
 
     @Test
@@ -119,6 +142,7 @@ class NotificationOutboxPublicationServiceTest {
 
         assertEquals(List.of(first, second), publisher.attempts);
         assertEquals(Set.of(first.eventId()), repository.completed);
+        assertOnlyPublicationLog(first);
     }
 
     @Test
@@ -155,12 +179,14 @@ class NotificationOutboxPublicationServiceTest {
         repository.pending.add(event);
         publisher.behavior = ignored -> { throw new IllegalStateException("발행 실패"); };
         assertThrows(IllegalStateException.class, () -> service.publishPending(1));
+        assertTrue(publicationLogs().isEmpty());
         publisher.behavior = ignored -> {};
 
         assertEquals(1, service.publishPending(1));
 
         assertEquals(List.of(event, event), publisher.attempts);
         assertEquals(Set.of(event.eventId()), repository.completed);
+        assertOnlyPublicationLog(event);
     }
 
     @Test
@@ -169,12 +195,14 @@ class NotificationOutboxPublicationServiceTest {
         repository.pending.add(event);
         repository.completionFailure = new IllegalStateException("완료 기록 실패");
         assertThrows(IllegalStateException.class, () -> service.publishPending(1));
+        assertTrue(publicationLogs().isEmpty());
         repository.completionFailure = null;
 
         assertEquals(1, service.publishPending(1));
 
         assertEquals(List.of(event, event), publisher.attempts);
         assertEquals(Set.of(event.eventId()), repository.completed);
+        assertOnlyPublicationLog(event);
     }
 
     @ParameterizedTest
@@ -184,6 +212,23 @@ class NotificationOutboxPublicationServiceTest {
 
         assertEquals(0, repository.queryCount);
         assertTrue(publisher.attempts.isEmpty());
+    }
+
+    private List<ILoggingEvent> publicationLogs() {
+        return entries.list.stream()
+                .filter(entry -> entry.getFormattedMessage().startsWith("outbox_publication_recorded"))
+                .toList();
+    }
+
+    private void assertOnlyPublicationLog(NotificationOutboxEvent event) {
+        var logs = publicationLogs();
+        assertEquals(1, logs.size());
+        var entry = logs.getFirst();
+        assertEquals(Level.INFO, entry.getLevel());
+        assertThat(entry.getFormattedMessage().split(" ")).containsExactlyInAnyOrder(
+                "outbox_publication_recorded", "notificationId=" + event.notificationId(),
+                "dispatchId=" + event.dispatchId(), "eventId=" + event.eventId());
+        assertNull(entry.getThrowableProxy());
     }
 
     private static NotificationOutboxEvent event() {

@@ -1,5 +1,9 @@
 package me.hanhyur.notify.api.notification.application;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.AppenderBase;
 import me.hanhyur.notify.api.notification.domain.Channel;
 import me.hanhyur.notify.api.notification.domain.Notification;
 import me.hanhyur.notify.api.notification.domain.NotificationOutboxEvent;
@@ -10,6 +14,7 @@ import me.hanhyur.notify.api.notification.infrastructure.JpaNotificationOutboxRe
 import me.hanhyur.notify.api.support.PostgresTestConfiguration;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -20,6 +25,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -153,6 +159,46 @@ class NotificationOutboxPublicationServiceIntegrationTest {
         assertEquals(1, service.publishPending(1));
         assertEquals(List.of(event, event), publisher.attempts);
         assertEquals(NOW, publishedAt(event.eventId()));
+    }
+
+    @Test
+    void logsTheRetriedEventWhenItsCompletionIsVisibleToAnotherTransaction() {
+        var event = seedEvent(NOW);
+        var reader = new TransactionTemplate(transactionManager);
+        reader.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        record ObservedLog(Level level, String message, Instant publishedAt) {}
+        var observed = new ArrayList<ObservedLog>();
+        var appender = new AppenderBase<ILoggingEvent>() {
+            @Override
+            protected void append(ILoggingEvent entry) {
+                String message = entry.getFormattedMessage();
+                if (message.startsWith("outbox_publication_recorded ")) {
+                    Instant committedAt = reader.execute(status -> publishedAt(event.eventId()));
+                    observed.add(new ObservedLog(entry.getLevel(), message, committedAt));
+                }
+            }
+        };
+        Logger logger = (Logger) LoggerFactory.getLogger(NotificationOutboxPublicationService.class);
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            publicationRepository.failCompletionWith(new IllegalStateException("완료 기록 취소"));
+            assertThrows(IllegalStateException.class, () -> service.publishPending(1));
+            assertTrue(observed.isEmpty());
+            assertNull(publishedAt(event.eventId()));
+
+            publicationRepository.failCompletionWith(null);
+            assertEquals(1, service.publishPending(1));
+            assertEquals(List.of(event, event), publisher.attempts);
+            assertEquals(1, observed.size());
+            ObservedLog success = observed.getFirst();
+            assertEquals(Level.INFO, success.level());
+            assertTrue(List.of(success.message().split(" ")).contains("eventId=" + event.eventId()));
+            assertEquals(NOW, success.publishedAt());
+        } finally {
+            logger.detachAppender(appender);
+            appender.stop();
+        }
     }
 
     @Test
