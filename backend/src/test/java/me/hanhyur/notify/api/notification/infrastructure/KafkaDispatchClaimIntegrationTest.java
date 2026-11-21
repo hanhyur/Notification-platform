@@ -1,5 +1,9 @@
 package me.hanhyur.notify.api.notification.infrastructure;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.AppenderBase;
 import com.sun.net.httpserver.HttpServer;
 import me.hanhyur.notify.api.notification.application.NotificationOutboxPublicationService;
 import me.hanhyur.notify.api.notification.application.NotificationRegistrationService;
@@ -17,9 +21,12 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -31,6 +38,9 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistrar;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.kafka.KafkaContainer;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -40,13 +50,17 @@ import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -62,10 +76,16 @@ import static org.junit.jupiter.api.Assertions.*;
 class KafkaDispatchClaimIntegrationTest {
 
     private static final Duration WAIT = Duration.ofSeconds(15);
+    private static final Set<String> LIFECYCLE_STAGES = Set.of(
+            "notification_registered", "outbox_publication_recorded", "dispatch_claimed", "delivery_result_recorded");
 
     private final AtomicInteger requests = new AtomicInteger();
     private final CompletableFuture<JsonNode> received = new CompletableFuture<>();
     private final CountDownLatch allowResponse = new CountDownLatch(1);
+    private final Logger notificationLogger = (Logger) LoggerFactory.getLogger("me.hanhyur.notify.api.notification");
+    private final List<LifecycleLog> lifecycleLogs = new CopyOnWriteArrayList<>();
+    private volatile UUID expectedDispatchId;
+    private AppenderBase<ILoggingEvent> lifecycleAppender;
 
     @Autowired
     private NotificationRegistrationService registration;
@@ -80,6 +100,8 @@ class KafkaDispatchClaimIntegrationTest {
     @Autowired
     private JdbcClient jdbc;
     @Autowired
+    private PlatformTransactionManager transactions;
+    @Autowired
     private KafkaContainer kafka;
     @Autowired
     private Sandbox sandbox;
@@ -90,6 +112,12 @@ class KafkaDispatchClaimIntegrationTest {
     @Value("${notification.dispatch.consumer.group-id}")
     private String groupId;
 
+    @AfterEach
+    void releaseLifecycleLogs() {
+        notificationLogger.detachAppender(lifecycleAppender);
+        lifecycleAppender.stop();
+    }
+
     @ParameterizedTest
     @EnumSource(value = NotificationStatus.class, names = {"ACCEPTED", "UNKNOWN"})
     @Timeout(45)
@@ -99,6 +127,8 @@ class KafkaDispatchClaimIntegrationTest {
         UUID id = registered.notificationId();
         NotificationOutboxEvent event = outbox.findPending(Instant.now(), 1).getFirst();
         assertEquals(id, event.notificationId());
+        expectedDispatchId = event.dispatchId();
+        assertStage("notification_registered", Level.INFO, event);
 
         String reference = "sandbox-" + event.dispatchId();
         configureProviderResponse(expected, reference);
@@ -116,6 +146,9 @@ class KafkaDispatchClaimIntegrationTest {
             assertEquals("STARTED", started.status());
             assertEquals(claimed.updatedAt(), started.startedAt());
             assertNull(started.finishedAt());
+            assertStage("outbox_publication_recorded", Level.INFO, event);
+            assertTrue(assertStage("dispatch_claimed", Level.INFO, event).committedClaim());
+            assertEquals(3, lifecycleLogs.size());
         } finally {
             allowResponse.countDown();
         }
@@ -137,12 +170,53 @@ class KafkaDispatchClaimIntegrationTest {
 
         publisher.publish(event);
         awaitBothCommits();
+        Level resultLevel = expected == NotificationStatus.ACCEPTED ? Level.INFO : Level.WARN;
+        assertThat(assertStage("delivery_result_recorded", resultLevel, event).fields()).contains("status=" + expected);
+        assertEquals(4, lifecycleLogs.size());
         assertEquals(result, notifications.findById(id).orElseThrow());
         assertEquals(finished, singleAttempt(id));
         assertEquals(1, requests.get());
         assertEquals(1L, jdbc.sql("select count(*) from notification_outbox where notification_id = :id")
                 .param("id", id).query(Long.class).single());
     }
+
+    @BeforeEach
+    void observeLifecycleLogs() {
+        var reader = new TransactionTemplate(transactions);
+        reader.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        lifecycleAppender = new AppenderBase<>() {
+            @Override
+            protected void append(ILoggingEvent entry) {
+                var fields = List.of(entry.getFormattedMessage().split(" "));
+                String stage = fields.getFirst();
+                if (LIFECYCLE_STAGES.contains(stage)) {
+                    boolean committedClaim = stage.equals("dispatch_claimed") && reader.execute(tx ->
+                            jdbc.sql("""
+                                    SELECT EXISTS (
+                                        SELECT 1 FROM notifications n
+                                        JOIN notification_delivery_attempts a ON a.notification_id = n.notification_id
+                                        WHERE a.dispatch_id = :dispatch AND n.status = 'SENDING' AND a.status = 'STARTED'
+                                    )
+                                    """).param("dispatch", expectedDispatchId).query(Boolean.class).single());
+                    lifecycleLogs.add(new LifecycleLog(stage, entry.getLevel(), fields, committedClaim));
+                }
+            }
+        };
+        lifecycleAppender.start();
+        notificationLogger.addAppender(lifecycleAppender);
+    }
+
+    private LifecycleLog assertStage(String stage, Level level, NotificationOutboxEvent event) {
+        var matching = lifecycleLogs.stream().filter(log -> log.stage().equals(stage)).toList();
+        assertThat(matching).as(stage).hasSize(1);
+        LifecycleLog log = matching.getFirst();
+        assertEquals(level, log.level());
+        assertThat(log.fields()).contains("notificationId=" + event.notificationId(),
+                "dispatchId=" + event.dispatchId(), "eventId=" + event.eventId());
+        return log;
+    }
+
+    private record LifecycleLog(String stage, Level level, List<String> fields, boolean committedClaim) {}
 
     private void awaitBothCommits() throws Exception {
         TopicPartition partition = new TopicPartition(topic, 0);

@@ -8,6 +8,8 @@ import me.hanhyur.notify.api.notification.domain.NotificationProvider;
 import me.hanhyur.notify.api.notification.domain.NotificationRepository;
 import me.hanhyur.notify.api.notification.domain.NotificationStatus;
 import me.hanhyur.notify.api.notification.domain.ProviderResult;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +18,9 @@ import java.time.Duration;
 import java.time.Instant;
 
 public class NotificationDeliveryService {
+
+    private static final Logger log = LoggerFactory.getLogger(NotificationDeliveryService.class);
+    private static final String DISPATCH_CLAIMED = "dispatch_claimed notificationId={} dispatchId={} eventId={}";
 
     private final NotificationDispatchClaimRepository claims;
     private final NotificationRepository notifications;
@@ -40,6 +45,11 @@ public class NotificationDeliveryService {
     @Transactional(propagation = Propagation.NEVER)
     public void deliver(NotificationOutboxEvent event, Instant now) {
         boolean claimed = claims.tryClaim(event, now);
+
+        if (claimed) {
+            log.info(DISPATCH_CLAIMED, event.notificationId(), event.dispatchId(), event.eventId());
+        }
+
         var current = notifications.findById(event.notificationId())
                 .filter(notification -> notification.status() == NotificationStatus.SENDING
                         && notification.currentDispatchId().equals(event.dispatchId())
