@@ -130,6 +130,22 @@ public class NotificationJpaEntity {
         return entity;
     }
 
+    Instant acceptedAt() {
+        return acceptedAt;
+    }
+
+    Instant completedAt() {
+        return completedAt;
+    }
+
+    String lastErrorCode() {
+        return lastErrorCode;
+    }
+
+    String errorSummary() {
+        return errorSummary;
+    }
+
     public Notification toDomain() {
         return new Notification(
                 notificationId,

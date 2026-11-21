@@ -18,7 +18,7 @@ public final class NotificationSchedulePolicy {
         Duration delay = Duration.between(now, scheduledAt);
 
         if (delay.compareTo(MAX_SCHEDULE_DELAY) > 0 || !delay.isPositive()) {
-            throw new IllegalArgumentException();
+            throw new NotificationScheduleException();
         }
 
         return NotificationStatus.SCHEDULED;
