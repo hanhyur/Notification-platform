@@ -63,8 +63,8 @@ class DatabaseMigrationIntegrationTest {
     @Test
     void appliesAllSchemaMigrations() {
         assertNotNull(flyway.info().current());
-        assertEquals("4", flyway.info().current().getVersion().getVersion());
-        assertEquals(4, flyway.info().applied().length);
+        assertEquals("5", flyway.info().current().getVersion().getVersion());
+        assertEquals(5, flyway.info().applied().length);
         assertTrue(jdbc.sql(
                 "SELECT to_regclass('public.notifications') IS NOT NULL"
         ).query(Boolean.class).single());
@@ -73,6 +73,9 @@ class DatabaseMigrationIntegrationTest {
         ).query(Boolean.class).single());
         assertTrue(jdbc.sql(
                 "SELECT to_regclass('public.notification_delivery_attempts') IS NOT NULL"
+        ).query(Boolean.class).single());
+        assertTrue(jdbc.sql(
+                "SELECT to_regclass('public.integration_registration_requests') IS NOT NULL"
         ).query(Boolean.class).single());
         flyway.validate();
     }

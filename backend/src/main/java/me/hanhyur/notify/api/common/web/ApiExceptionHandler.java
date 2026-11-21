@@ -85,7 +85,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return handleExceptionInternal(ex, body, headers, status, request);
     }
 
-    private ProblemDetail problem(
+    public static ProblemDetail problem(
             HttpStatusCode status,
             String title,
             String detail,
