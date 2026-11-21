@@ -3,6 +3,7 @@ package me.hanhyur.notify.api.notification.application;
 import me.hanhyur.notify.api.notification.domain.Channel;
 import me.hanhyur.notify.api.notification.domain.Notification;
 import me.hanhyur.notify.api.notification.domain.NotificationFactory;
+import me.hanhyur.notify.api.notification.domain.NotificationOutboxEvent;
 import me.hanhyur.notify.api.notification.domain.NotificationRepository;
 import me.hanhyur.notify.api.notification.domain.NotificationSchedulePolicy;
 import me.hanhyur.notify.api.notification.domain.NotificationStatus;
@@ -30,6 +31,8 @@ class NotificationRegistrationServiceTest {
 
     private final RecordingNotificationRepository repository =
             new RecordingNotificationRepository();
+    private final List<NotificationOutboxEvent> outbox = new ArrayList<>();
+    private final List<Object> events = new ArrayList<>();
     private final NotificationRegistrationService service =
             new NotificationRegistrationService(
                     new NotificationFactory(
@@ -37,7 +40,8 @@ class NotificationRegistrationServiceTest {
                             new NotificationSchedulePolicy()
                     ),
                     repository,
-                    event -> {}
+                    outbox::add,
+                    events::add
             );
 
     @Test
@@ -47,6 +51,8 @@ class NotificationRegistrationServiceTest {
         Notification actual = service.register(command);
 
         assertEquals(1, repository.saved.size());
+        assertEquals(List.of(new NotificationRegistered(actual.notificationId(), actual.currentDispatchId(),
+                outbox.getFirst().eventId())), events);
         assertAll(
                 () -> assertSame(repository.saved.getFirst(), actual),
                 () -> assertEquals(command.customerId(), actual.customerId()),
@@ -109,6 +115,7 @@ class NotificationRegistrationServiceTest {
 
         assertSame(failure, actual);
         assertTrue(repository.saved.isEmpty());
+        assertTrue(events.isEmpty());
     }
 
     @Test
