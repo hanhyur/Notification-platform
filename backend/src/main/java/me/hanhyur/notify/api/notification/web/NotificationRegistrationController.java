@@ -2,15 +2,19 @@ package me.hanhyur.notify.api.notification.web;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import me.hanhyur.notify.api.auth.OperatorSession;
 import me.hanhyur.notify.api.notification.application.IntegrationNotificationDetail;
 import me.hanhyur.notify.api.notification.application.IntegrationRegistrationConflictException;
+import me.hanhyur.notify.api.notification.application.IntegrationRegistrationResult;
 import me.hanhyur.notify.api.notification.application.IntegrationRegistrationService;
 import me.hanhyur.notify.api.notification.application.RegisterNotificationCommand;
 import me.hanhyur.notify.api.notification.domain.NotificationScheduleException;
 import me.hanhyur.notify.api.notification.dto.NotificationCreateRequest;
 import org.springframework.dao.DataAccessException;
+import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.transaction.TransactionException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -22,25 +26,40 @@ import java.net.URI;
 import java.util.UUID;
 
 @RestController
-class IntegrationNotificationController {
+class NotificationRegistrationController {
 
-    static final String PATH = "/integration/v1/notifications";
+    static final String INTEGRATION_PATH = "/integration/v1/notifications";
 
     private final IntegrationRegistrationService registration;
 
-    IntegrationNotificationController(IntegrationRegistrationService registration) {
+    NotificationRegistrationController(IntegrationRegistrationService registration) {
         this.registration = registration;
     }
 
-    @PostMapping(PATH)
-    ResponseEntity<IntegrationNotificationDetail> create(
+    @PostMapping(INTEGRATION_PATH)
+    ResponseEntity<IntegrationNotificationDetail> createIntegrationNotification(
             @RequestAttribute(IntegrationClientAccess.CLIENT_ID) String clientId,
             @Valid @RequestBody NotificationCreateRequest body,
             HttpServletRequest request
     ) {
-        var command = new RegisterNotificationCommand(
+        return accepted(registration.register(clientId, idempotencyKey(request), command(body)));
+    }
+
+    @PostMapping(path = "/api/v1/notifications", consumes = MediaType.APPLICATION_JSON_VALUE)
+    ResponseEntity<IntegrationNotificationDetail> createOperatorNotification(
+            @AuthenticationPrincipal OperatorSession operator,
+            @Valid @RequestBody NotificationCreateRequest body,
+            HttpServletRequest request
+    ) {
+        return accepted(registration.registerAsOperator(operator.operatorId(), idempotencyKey(request), command(body)));
+    }
+
+    private RegisterNotificationCommand command(NotificationCreateRequest body) {
+        return new RegisterNotificationCommand(
                 body.customerId(), body.channel(), body.recipient(), body.title(), body.content(), body.scheduledAt());
-        var result = registration.register(clientId, idempotencyKey(request), command);
+    }
+
+    private ResponseEntity<IntegrationNotificationDetail> accepted(IntegrationRegistrationResult result) {
         return ResponseEntity.accepted()
                 .location(URI.create("/api/v1/notifications/" + result.detail().notificationId()))
                 .header("Idempotent-Replayed", Boolean.toString(result.replayed()))

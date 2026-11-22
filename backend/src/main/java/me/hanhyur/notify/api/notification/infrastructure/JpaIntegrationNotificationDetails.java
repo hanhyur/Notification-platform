@@ -3,6 +3,7 @@ package me.hanhyur.notify.api.notification.infrastructure;
 import jakarta.persistence.EntityManager;
 import me.hanhyur.notify.api.notification.application.IntegrationNotificationDetail;
 import me.hanhyur.notify.api.notification.application.IntegrationNotificationDetails;
+import me.hanhyur.notify.api.notification.application.RegistrationOwner;
 import me.hanhyur.notify.api.notification.domain.NotificationStatus;
 import org.springframework.stereotype.Repository;
 
@@ -21,7 +22,7 @@ class JpaIntegrationNotificationDetails implements IntegrationNotificationDetail
     }
 
     @Override
-    public IntegrationNotificationDetail find(UUID notificationId) {
+    public IntegrationNotificationDetail find(UUID notificationId, RegistrationOwner owner) {
         var entity = entityManager.getReference(NotificationJpaEntity.class, notificationId);
         entityManager.refresh(entity);
         var notification = entity.toDomain();
@@ -31,6 +32,6 @@ class JpaIntegrationNotificationDetails implements IntegrationNotificationDetail
                     .orElseThrow().toDomain().availableAt();
         }
         return IntegrationNotificationDetail.from(notification, nextAttemptAt, entity.acceptedAt(),
-                entity.completedAt(), entity.lastErrorCode(), entity.errorSummary());
+                entity.completedAt(), entity.lastErrorCode(), entity.errorSummary(), owner.allowedActions(notification.status()));
     }
 }

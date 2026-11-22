@@ -16,12 +16,12 @@ public record IntegrationNotificationDetail(
         long version, String lastErrorCode, String errorSummary
 ) {
     public static IntegrationNotificationDetail from(Notification notification, Instant nextAttemptAt,
-            Instant acceptedAt, Instant completedAt, String lastErrorCode, String errorSummary) {
+            Instant acceptedAt, Instant completedAt, String lastErrorCode, String errorSummary, List<String> allowedActions) {
         return new IntegrationNotificationDetail(
                 notification.notificationId(), notification.customerId(), notification.channel(),
                 maskRecipient(notification.channel(), notification.recipient()), notification.status(),
                 notification.createdAt(), notification.updatedAt(), notification.scheduledAt(), nextAttemptAt,
-                acceptedAt, completedAt, List.of(), notification.title(), notification.content(),
+                acceptedAt, completedAt, allowedActions, notification.title(), notification.content(),
                 notification.currentDispatchId(), notification.generation(), notification.retryCount(),
                 notification.version(), lastErrorCode, errorSummary);
     }

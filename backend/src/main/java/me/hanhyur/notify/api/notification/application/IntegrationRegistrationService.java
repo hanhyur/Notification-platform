@@ -25,16 +25,25 @@ public class IntegrationRegistrationService {
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public IntegrationRegistrationResult register(String clientId, UUID key, RegisterNotificationCommand command) {
+        return register(RegistrationOwner.integration(clientId), key, command);
+    }
+
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public IntegrationRegistrationResult registerAsOperator(UUID operatorId, UUID key, RegisterNotificationCommand command) {
+        return register(RegistrationOwner.operator(operatorId), key, command);
+    }
+
+    private IntegrationRegistrationResult register(RegistrationOwner owner, UUID key, RegisterNotificationCommand command) {
         String requestHash = RegistrationFingerprint.of(command);
-        var previous = requests.reserve(clientId, key, requestHash);
+        var previous = requests.reserve(owner, key, requestHash);
         if (previous.isPresent()) {
-            return replay(previous.get(), requestHash);
+            return replay(previous.get(), requestHash, owner);
         }
 
         UUID notificationId = registration.register(command).notificationId();
-        requests.complete(clientId, key, notificationId);
+        requests.complete(owner, key, notificationId);
 
-        IntegrationNotificationDetail detail = details.find(notificationId);
+        IntegrationNotificationDetail detail = details.find(notificationId, owner);
 
         return new IntegrationRegistrationResult(
                 detail,
@@ -42,12 +51,13 @@ public class IntegrationRegistrationService {
         );
     }
 
-    private IntegrationRegistrationResult replay(IntegrationRegistrationRequests.Receipt previous, String requestHash) {
+    private IntegrationRegistrationResult replay(IntegrationRegistrationRequests.Receipt previous, String requestHash,
+            RegistrationOwner owner) {
         if (!previous.requestHash().equals(requestHash)) {
             throw new IntegrationRegistrationConflictException();
         }
 
-        IntegrationNotificationDetail detail = details.find(previous.notificationId());
+        IntegrationNotificationDetail detail = details.find(previous.notificationId(), owner);
 
         return new IntegrationRegistrationResult(
                 detail,
