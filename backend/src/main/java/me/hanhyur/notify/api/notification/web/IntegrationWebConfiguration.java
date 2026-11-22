@@ -15,6 +15,6 @@ class IntegrationWebConfiguration implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(access).addPathPatterns(IntegrationNotificationController.PATH);
+        registry.addInterceptor(access).addPathPatterns(NotificationRegistrationController.INTEGRATION_PATH);
     }
 }

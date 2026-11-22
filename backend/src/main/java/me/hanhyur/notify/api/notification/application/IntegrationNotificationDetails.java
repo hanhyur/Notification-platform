@@ -4,5 +4,5 @@ import java.util.UUID;
 
 public interface IntegrationNotificationDetails {
 
-    IntegrationNotificationDetail find(UUID notificationId);
+    IntegrationNotificationDetail find(UUID notificationId, RegistrationOwner owner);
 }

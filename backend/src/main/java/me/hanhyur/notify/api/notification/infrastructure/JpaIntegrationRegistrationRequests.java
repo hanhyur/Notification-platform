@@ -2,6 +2,7 @@ package me.hanhyur.notify.api.notification.infrastructure;
 
 import jakarta.persistence.EntityManager;
 import me.hanhyur.notify.api.notification.application.IntegrationRegistrationRequests;
+import me.hanhyur.notify.api.notification.application.RegistrationOwner;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -17,29 +18,30 @@ class JpaIntegrationRegistrationRequests implements IntegrationRegistrationReque
     }
 
     @Override
-    public Optional<Receipt> reserve(String clientId, UUID key, String requestHash) {
+    public Optional<Receipt> reserve(RegistrationOwner owner, UUID key, String requestHash) {
         int inserted = entityManager.createNativeQuery("""
-                        INSERT INTO integration_registration_requests (client_id, idempotency_key, request_hash)
-                        VALUES (:clientId, :key, :requestHash)
-                        ON CONFLICT (client_id, idempotency_key) DO NOTHING
+                        INSERT INTO integration_registration_requests (owner_type, client_id, idempotency_key, request_hash)
+                        VALUES (:ownerType, :ownerId, :key, :requestHash)
+                        ON CONFLICT (owner_type, client_id, idempotency_key) DO NOTHING
                         """)
-                .setParameter("clientId", clientId)
+                .setParameter("ownerType", owner.kind().name())
+                .setParameter("ownerId", owner.id())
                 .setParameter("key", key)
                 .setParameter("requestHash", requestHash)
                 .executeUpdate();
         if (inserted == 1) {
             return Optional.empty();
         }
-        return Optional.of(find(clientId, key).receipt());
+        return Optional.of(find(owner, key).receipt());
     }
 
     @Override
-    public void complete(String clientId, UUID key, UUID notificationId) {
-        find(clientId, key).complete(notificationId);
+    public void complete(RegistrationOwner owner, UUID key, UUID notificationId) {
+        find(owner, key).complete(notificationId);
     }
 
-    private IntegrationRegistrationRequestJpaEntity find(String clientId, UUID key) {
+    private IntegrationRegistrationRequestJpaEntity find(RegistrationOwner owner, UUID key) {
         return entityManager.find(IntegrationRegistrationRequestJpaEntity.class,
-                new IntegrationRegistrationRequestJpaEntity.Key(clientId, key));
+                new IntegrationRegistrationRequestJpaEntity.Key(owner.kind().name(), owner.id(), key));
     }
 }

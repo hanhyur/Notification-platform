@@ -17,7 +17,8 @@ class IntegrationRegistrationRequestJpaEntity {
 
     @Embeddable
     record Key(
-            @Column(name = "client_id", length = 100) String clientId,
+            @Column(name = "owner_type", length = 16) String ownerType,
+            @Column(name = "client_id", length = 100) String ownerId,
             @Column(name = "idempotency_key") UUID idempotencyKey
     ) implements Serializable {
     }
