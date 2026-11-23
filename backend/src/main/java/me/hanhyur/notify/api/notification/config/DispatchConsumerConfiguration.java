@@ -5,16 +5,19 @@ import me.hanhyur.notify.api.notification.domain.NotificationDeliveryResultRepos
 import me.hanhyur.notify.api.notification.domain.NotificationDispatchClaimRepository;
 import me.hanhyur.notify.api.notification.domain.NotificationProvider;
 import me.hanhyur.notify.api.notification.domain.NotificationRepository;
+import me.hanhyur.notify.api.notification.infrastructure.DispatchWorkerPool;
 import me.hanhyur.notify.api.notification.infrastructure.KafkaDispatchListener;
 import me.hanhyur.notify.api.notification.infrastructure.SandboxHttpNotificationProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.kafka.autoconfigure.ConcurrentKafkaListenerContainerFactoryConfigurer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.DependsOn;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.listener.ContainerProperties;
@@ -59,17 +62,27 @@ public class DispatchConsumerConfiguration {
     }
 
     @Bean
-    KafkaDispatchListener kafkaDispatchListener(JsonMapper json, NotificationDeliveryService delivery, Clock clock) {
-        return new KafkaDispatchListener(json, delivery, clock);
+    @DependsOn("notificationDeliveryService")
+    DispatchWorkerPool dispatchWorkerPool(@Value("${notification.dispatch.pool.workers:2}") int workers,
+            @Value("${notification.dispatch.pool.queue-capacity:2}") int queueCapacity) {
+        return new DispatchWorkerPool(workers, queueCapacity);
+    }
+
+    @Bean
+    KafkaDispatchListener kafkaDispatchListener(JsonMapper json, NotificationDeliveryService delivery, Clock clock,
+            DispatchWorkerPool workers) {
+        return new KafkaDispatchListener(json, delivery, clock, workers::execute);
     }
 
     @Bean
     ConcurrentKafkaListenerContainerFactory<Object, Object> dispatchKafkaListenerContainerFactory(
             ConcurrentKafkaListenerContainerFactoryConfigurer configurer,
-            ConsumerFactory<Object, Object> consumerFactory
+            ConsumerFactory<Object, Object> consumerFactory,
+            @Value("${notification.dispatch.consumer.concurrency:4}") int concurrency
     ) {
         var factory = new ConcurrentKafkaListenerContainerFactory<Object, Object>();
         configurer.configure(factory, consumerFactory);
+        factory.setConcurrency(concurrency);
         factory.setBatchListener(false);
         factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.RECORD);
 
