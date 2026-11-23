@@ -5,25 +5,33 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.UUID;
 
-final class RegistrationFingerprint {
+final class RequestFingerprint {
 
-    private RegistrationFingerprint() {
+    private RequestFingerprint() {
     }
 
     static String of(RegisterNotificationCommand command) {
+        return hash(command.customerId(), command.channel().name(), command.recipient(), command.title(),
+                command.content(), command.scheduledAt() == null ? "" : command.scheduledAt().toString());
+    }
+
+    static String of(UUID notificationId, OperatorActionCommand command) {
+        return hash(notificationId.toString(), command.kind().name(), Long.toString(command.expectedVersion()),
+                command.resolution() == null ? "" : command.resolution().name(), command.note());
+    }
+
+    private static String hash(String... fields) {
         MessageDigest digest;
         try {
             digest = MessageDigest.getInstance("SHA-256");
         } catch (NoSuchAlgorithmException ex) {
             throw new IllegalStateException(ex);
         }
-        append(digest, command.customerId());
-        append(digest, command.channel().name());
-        append(digest, command.recipient());
-        append(digest, command.title());
-        append(digest, command.content());
-        append(digest, command.scheduledAt() == null ? "" : command.scheduledAt().toString());
+        for (String field : fields) {
+            append(digest, field);
+        }
         return HexFormat.of().formatHex(digest.digest());
     }
 

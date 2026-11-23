@@ -11,8 +11,11 @@ import java.io.IOException;
 import java.time.Clock;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 final class OperatorRequestLimit extends OncePerRequestFilter {
+
+    private static final Pattern RETRY_PATH = Pattern.compile("/api/v1/notifications/[^/]+/retries");
 
     private final OperatorAccounts accounts;
     private final OperatorProblemWriter problems;
@@ -32,13 +35,14 @@ final class OperatorRequestLimit extends OncePerRequestFilter {
         int limit;
         String key;
         String path = request.getServletPath();
+        boolean registration = "/api/v1/notifications".equals(path);
         if ("POST".equals(request.getMethod()) && "/api/v1/auth/login".equals(path)) {
             limit = accounts.loginRequestsPerMinute();
             key = "login/" + request.getRemoteAddr();
-        } else if ("POST".equals(request.getMethod()) && "/api/v1/notifications".equals(path)
+        } else if ("POST".equals(request.getMethod()) && (registration || RETRY_PATH.matcher(path).matches())
                 && SecurityContextHolder.getContext().getAuthentication().getPrincipal() instanceof OperatorSession operator) {
-            limit = accounts.registrationRequestsPerMinute();
-            key = "register/" + operator.operatorId();
+            limit = registration ? accounts.registrationRequestsPerMinute() : accounts.retryRequestsPerMinute();
+            key = (registration ? "register/" : "retry/") + operator.operatorId();
         } else {
             chain.doFilter(request, response);
             return;

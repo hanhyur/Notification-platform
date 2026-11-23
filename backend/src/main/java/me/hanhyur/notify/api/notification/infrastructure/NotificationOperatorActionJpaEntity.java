@@ -56,6 +56,20 @@ class NotificationOperatorActionJpaEntity {
     protected NotificationOperatorActionJpaEntity() {
     }
 
+    NotificationOperatorActionJpaEntity(UUID notificationId, OperatorNotificationHistory.Action entry) {
+        this.id = entry.id();
+        this.notificationId = notificationId;
+        this.operatorId = entry.operatorId();
+        this.action = entry.action();
+        this.reason = entry.reason();
+        this.evidence = entry.evidence();
+        this.resolution = entry.resolution();
+        this.previousStatus = entry.previousStatus();
+        this.resultingStatus = entry.resultingStatus();
+        this.generation = entry.generation();
+        this.createdAt = entry.createdAt();
+    }
+
     OperatorNotificationHistory.Action toAction() {
         return new OperatorNotificationHistory.Action(id, operatorId, action, reason, evidence, resolution,
                 previousStatus, resultingStatus, generation, createdAt);
