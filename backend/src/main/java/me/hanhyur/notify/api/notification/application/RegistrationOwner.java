@@ -27,6 +27,10 @@ public record RegistrationOwner(Kind kind, String id) {
         if (kind == Kind.INTEGRATION) {
             return List.of();
         }
+        return operatorActions(status);
+    }
+
+    static List<String> operatorActions(NotificationStatus status) {
         return switch (status) {
             case FAILED -> List.of("RETRY");
             case UNKNOWN -> List.of("RESOLVE_UNKNOWN");

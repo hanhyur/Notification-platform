@@ -4,6 +4,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import me.hanhyur.notify.api.notification.application.OperatorNotificationHistory;
 import me.hanhyur.notify.api.notification.domain.DeliveryDecision;
 
 import java.time.Instant;
@@ -48,6 +49,11 @@ public class NotificationDeliveryAttemptJpaEntity {
     private String errorSummary;
 
     protected NotificationDeliveryAttemptJpaEntity() {
+    }
+
+    OperatorNotificationHistory.Attempt toAttempt() {
+        return new OperatorNotificationHistory.Attempt(attemptId, notificationId, dispatchId, attemptNo, status,
+                failureCategory, startedAt, finishedAt, providerReference, errorCode, errorSummary);
     }
 
     Instant finish(DeliveryDecision decision, String reference, Instant now) {
