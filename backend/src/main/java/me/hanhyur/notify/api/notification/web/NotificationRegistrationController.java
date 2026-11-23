@@ -23,7 +23,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
-import java.util.UUID;
 
 @RestController
 class NotificationRegistrationController {
@@ -42,7 +41,7 @@ class NotificationRegistrationController {
             @Valid @RequestBody NotificationCreateRequest body,
             HttpServletRequest request
     ) {
-        return accepted(registration.register(clientId, idempotencyKey(request), command(body)));
+        return accepted(registration.register(clientId, IdempotencyKey.from(request), command(body)));
     }
 
     @PostMapping(path = "/api/v1/notifications", consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -51,7 +50,7 @@ class NotificationRegistrationController {
             @Valid @RequestBody NotificationCreateRequest body,
             HttpServletRequest request
     ) {
-        return accepted(registration.registerAsOperator(operator.operatorId(), idempotencyKey(request), command(body)));
+        return accepted(registration.registerAsOperator(operator.operatorId(), IdempotencyKey.from(request), command(body)));
     }
 
     private RegisterNotificationCommand command(NotificationCreateRequest body) {
@@ -64,21 +63,6 @@ class NotificationRegistrationController {
                 .location(URI.create("/api/v1/notifications/" + result.detail().notificationId()))
                 .header("Idempotent-Replayed", Boolean.toString(result.replayed()))
                 .body(result.detail());
-    }
-
-    private UUID idempotencyKey(HttpServletRequest request) {
-        String value = IntegrationClientAccess.singleHeader(request, "Idempotency-Key");
-        if (value != null && value.length() == 36) {
-            try {
-                UUID parsed = UUID.fromString(value);
-                if (parsed.toString().equalsIgnoreCase(value)) {
-                    return parsed;
-                }
-            } catch (IllegalArgumentException ignored) {
-                throw IntegrationProblem.INVALID_REQUEST.exception(request);
-            }
-        }
-        throw IntegrationProblem.INVALID_REQUEST.exception(request);
     }
 
     @ExceptionHandler(IntegrationRegistrationConflictException.class)

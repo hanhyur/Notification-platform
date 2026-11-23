@@ -34,7 +34,7 @@ public class IntegrationRegistrationService {
     }
 
     private IntegrationRegistrationResult register(RegistrationOwner owner, UUID key, RegisterNotificationCommand command) {
-        String requestHash = RegistrationFingerprint.of(command);
+        String requestHash = RequestFingerprint.of(command);
         var previous = requests.reserve(owner, key, requestHash);
         if (previous.isPresent()) {
             return replay(previous.get(), requestHash, owner);

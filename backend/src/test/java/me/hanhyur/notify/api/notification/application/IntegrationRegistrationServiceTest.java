@@ -34,7 +34,7 @@ class IntegrationRegistrationServiceTest {
     @Test
     void replaysTheCurrentAcceptedDetailWithoutRegisteringAnExpiredScheduleAgain() {
         var command = command("주문 확인");
-        String hash = RegistrationFingerprint.of(command);
+        String hash = RequestFingerprint.of(command);
         var previous = new IntegrationRegistrationRequests.Receipt(hash, notificationId);
         when(requests.reserve(CLIENT_OWNER, key, hash)).thenReturn(Optional.of(previous));
         Instant acceptedAt = SCHEDULED_AT.plusSeconds(2);
@@ -56,8 +56,8 @@ class IntegrationRegistrationServiceTest {
     void rejectsConflictingContentWithoutLoadingOrRegisteringANotification() {
         var original = command("주문 확인");
         var changed = command("주문 취소");
-        String changedHash = RegistrationFingerprint.of(changed);
-        var previous = new IntegrationRegistrationRequests.Receipt(RegistrationFingerprint.of(original), notificationId);
+        String changedHash = RequestFingerprint.of(changed);
+        var previous = new IntegrationRegistrationRequests.Receipt(RequestFingerprint.of(original), notificationId);
         when(requests.reserve(CLIENT_OWNER, key, changedHash)).thenReturn(Optional.of(previous));
 
         assertThrows(IntegrationRegistrationConflictException.class,
@@ -73,7 +73,7 @@ class IntegrationRegistrationServiceTest {
         UUID operatorId = UUID.randomUUID();
         var owner = RegistrationOwner.operator(operatorId);
         var command = command("주문 확인");
-        String hash = RegistrationFingerprint.of(command);
+        String hash = RequestFingerprint.of(command);
         when(requests.reserve(owner, key, hash))
                 .thenReturn(Optional.of(new IntegrationRegistrationRequests.Receipt(hash, notificationId)));
         var notification = new Notification(notificationId, UUID.randomUUID(), command.customerId(), command.channel(),

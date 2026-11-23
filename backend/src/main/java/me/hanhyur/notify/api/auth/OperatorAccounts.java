@@ -15,7 +15,8 @@ import java.util.UUID;
 @ConfigurationProperties("notification.auth")
 record OperatorAccounts(Map<String, Account> operators,
                        @DefaultValue("30") int loginRequestsPerMinute,
-                       @DefaultValue("120") int registrationRequestsPerMinute) implements UserDetailsService {
+                       @DefaultValue("120") int registrationRequestsPerMinute,
+                       @DefaultValue("120") int retryRequestsPerMinute) implements UserDetailsService {
 
     OperatorAccounts {
         operators = operators == null ? Map.of() : Map.copyOf(operators);
@@ -26,7 +27,7 @@ record OperatorAccounts(Map<String, Account> operators,
                 throw new IllegalArgumentException("운영자 계정의 이름과 고유 번호를 확인하세요.");
             }
         });
-        if (loginRequestsPerMinute < 1 || registrationRequestsPerMinute < 1) {
+        if (loginRequestsPerMinute < 1 || registrationRequestsPerMinute < 1 || retryRequestsPerMinute < 1) {
             throw new IllegalArgumentException("관리자 API의 분당 요청 한도는 양수여야 합니다.");
         }
     }

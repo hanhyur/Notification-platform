@@ -86,6 +86,39 @@ public class NotificationJpaEntity {
                 && generation == event.generation();
     }
 
+    NotificationOutboxEvent retryManually(UUID newDispatchId, Instant at) {
+        status = NotificationStatus.QUEUED;
+        currentDispatchId = newDispatchId;
+        generation++;
+        retryCount = 0;
+        version++;
+
+        updatedAt = at;
+        acceptedAt = null;
+        completedAt = null;
+        lastErrorCode = null;
+        errorSummary = null;
+
+        return new NotificationOutboxEvent(
+                UUID.randomUUID(),
+                notificationId,
+                currentDispatchId,
+                generation,
+                at,
+                at
+        );
+    }
+
+    void resolveUnknown(NotificationStatus resultingStatus, Instant at) {
+        status = resultingStatus;
+        updatedAt = at;
+        acceptedAt = resultingStatus == NotificationStatus.ACCEPTED ? at : null;
+        completedAt = at;
+        lastErrorCode = null;
+        errorSummary = null;
+        version++;
+    }
+
     int retryCount() {
         return retryCount;
     }
@@ -98,14 +131,22 @@ public class NotificationJpaEntity {
         errorSummary = decision.errorSummary();
         updatedAt = now;
         version++;
+
         if (decision.retryDelay() == null) {
             return Optional.empty();
         }
 
         currentDispatchId = UUID.randomUUID();
         retryCount++;
-        return Optional.of(new NotificationOutboxEvent(UUID.randomUUID(), notificationId, currentDispatchId,
-                generation, now, now.plus(decision.retryDelay())));
+
+        return Optional.of(new NotificationOutboxEvent(
+                UUID.randomUUID(),
+                notificationId,
+                currentDispatchId,
+                generation,
+                now,
+                now.plus(decision.retryDelay())
+        ));
     }
 
     public static NotificationJpaEntity fromDomain(Notification notification) {

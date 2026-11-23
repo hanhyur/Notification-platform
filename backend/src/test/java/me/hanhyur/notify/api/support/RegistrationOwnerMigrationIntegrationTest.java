@@ -37,11 +37,18 @@ class RegistrationOwnerMigrationIntegrationTest {
 
             var migration = Flyway.configure().dataSource(db).target("6").load();
             assertEquals(1, migration.migrate().migrationsExecuted);
-            var storedId = jdbc.sql("""
+            var receipt = jdbc.sql("""
                     select notification_id from integration_registration_requests
                     where owner_type = 'INTEGRATION' and client_id = :client and idempotency_key = :key and request_hash = :hash
-                    """).param("client", client).param("key", key).param("hash", hash).query(UUID.class).single();
-            assertEquals(notificationId, storedId);
+                    """).param("client", client).param("key", key).param("hash", hash);
+            assertEquals(notificationId, receipt.query(UUID.class).single());
+            Flyway.configure().dataSource(db).target("8").load().migrate();
+            assertEquals(notificationId, receipt.query(UUID.class).single());
+            assertEquals(0, jdbc.sql("""
+                    insert into integration_registration_requests (owner_type, client_id, idempotency_key, request_hash)
+                    values ('INTEGRATION', :client, :key, :hash)
+                    on conflict (owner_type, client_id, idempotency_key) do nothing
+                    """).param("client", client).param("key", key).param("hash", hash).update());
         }
     }
 }
