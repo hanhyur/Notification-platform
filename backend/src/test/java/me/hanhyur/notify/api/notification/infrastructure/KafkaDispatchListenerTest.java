@@ -13,6 +13,10 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -22,7 +26,8 @@ class KafkaDispatchListenerTest {
     private static final Instant NOW = Instant.parse("2026-11-19T09:30:00Z");
     private final NotificationDeliveryService delivery = mock();
     private final JsonMapper json = JsonMapper.builder().build();
-    private final KafkaDispatchListener listener = new KafkaDispatchListener(json, delivery, Clock.fixed(NOW, ZoneOffset.UTC));
+    private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+    private final KafkaDispatchListener listener = new KafkaDispatchListener(json, delivery, clock, Runnable::run);
 
     @Test
     void dispatchesAnEventDueNow() {
@@ -32,6 +37,29 @@ class KafkaDispatchListenerTest {
 
         verify(delivery).deliver(event, NOW);
         verifyNoMoreInteractions(delivery);
+    }
+
+    @Test
+    void returnsToTheContainerOnlyAfterTheSubmittedDeliveryFinishes() throws Exception {
+        var submitted = new CompletableFuture<Runnable>();
+        var controlled = new KafkaDispatchListener(json, delivery, clock, submitted::complete);
+        var event = eventDueAt(NOW);
+        var message = record(event.notificationId().toString(), json.writeValueAsString(event));
+        try (var consumer = Executors.newVirtualThreadPerTaskExecutor()) {
+            var returned = CompletableFuture.runAsync(() -> controlled.receive(message), consumer);
+            try {
+                CompletableFuture.anyOf(submitted, returned).get(5, TimeUnit.SECONDS);
+                assertTrue(submitted.isDone(), "리스너가 발송 작업을 지정한 실행기에 넘겨야 합니다.");
+                verifyNoInteractions(delivery);
+                assertThrows(TimeoutException.class, () -> returned.get(100, TimeUnit.MILLISECONDS));
+            } finally {
+                if (submitted.isDone()) {
+                    submitted.join().run();
+                }
+            }
+            returned.get(5, TimeUnit.SECONDS);
+            verify(delivery).deliver(event, NOW);
+        }
     }
 
     @ParameterizedTest
@@ -70,7 +98,10 @@ class KafkaDispatchListenerTest {
         var failure = new IllegalStateException("선점 저장 실패");
         doThrow(failure).when(delivery).deliver(event, NOW);
 
-        assertSame(failure, assertThrows(IllegalStateException.class, () -> listener.receive(record)));
+        try (var workers = new DispatchWorkerPool(1, 0)) {
+            var asynchronousListener = new KafkaDispatchListener(json, delivery, clock, workers::execute);
+            assertSame(failure, assertThrows(IllegalStateException.class, () -> asynchronousListener.receive(record)));
+        }
         verify(delivery).deliver(event, NOW);
         verifyNoMoreInteractions(delivery);
     }

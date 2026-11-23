@@ -36,6 +36,10 @@ notification:
     consumer:
       enabled: false
       group-id: notification-dispatch-worker
+      concurrency: 4
+    pool:
+      workers: 2
+      queue-capacity: 2
   outbox:
     polling:
       enabled: false

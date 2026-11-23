@@ -71,6 +71,7 @@ class DispatchConsumerConfigurationTest {
         contextRunner.withPropertyValues(
                 "notification.dispatch.consumer.enabled=true",
                 "notification.dispatch.consumer.group-id=dispatch-test-worker",
+                "notification.dispatch.consumer.concurrency=3",
                 "notification.dispatch.provider.endpoint=http://127.0.0.1/deliveries",
                 "notification.outbox.kafka.topic=dispatch-test-topic",
                 "spring.kafka.consumer.enable-auto-commit=true"
@@ -81,11 +82,13 @@ class DispatchConsumerConfigurationTest {
                     registry.getListenerContainer("notificationDispatchClaim"));
             assertFalse(listener.isRunning());
             var properties = listener.getContainerProperties();
+            assertEquals(3, listener.getConcurrency());
             assertEquals("dispatch-test-worker", properties.getGroupId());
             assertArrayEquals(new String[]{"dispatch-test-topic"}, properties.getTopics());
             assertEquals(ContainerProperties.AckMode.RECORD, properties.getAckMode());
             assertEquals("false", properties.getKafkaConsumerProperties().getProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG));
             assertEquals("earliest", properties.getKafkaConsumerProperties().getProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG));
+            assertEquals("1", properties.getKafkaConsumerProperties().getProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG));
 
             var errors = listener.getCommonErrorHandler();
             assertNotNull(errors);
