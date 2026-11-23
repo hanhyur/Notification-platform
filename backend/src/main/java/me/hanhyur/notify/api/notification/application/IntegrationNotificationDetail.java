@@ -19,28 +19,11 @@ public record IntegrationNotificationDetail(
             Instant acceptedAt, Instant completedAt, String lastErrorCode, String errorSummary, List<String> allowedActions) {
         return new IntegrationNotificationDetail(
                 notification.notificationId(), notification.customerId(), notification.channel(),
-                maskRecipient(notification.channel(), notification.recipient()), notification.status(),
+                RecipientMasking.mask(notification.channel(), notification.recipient()), notification.status(),
                 notification.createdAt(), notification.updatedAt(), notification.scheduledAt(), nextAttemptAt,
                 acceptedAt, completedAt, allowedActions, notification.title(), notification.content(),
                 notification.currentDispatchId(), notification.generation(), notification.retryCount(),
                 notification.version(), lastErrorCode, errorSummary);
-    }
-
-    private static String maskRecipient(Channel channel, String recipient) {
-        String masked = switch (channel) {
-            case EMAIL -> {
-                int at = recipient.lastIndexOf('@');
-                if (at < 1) {
-                    yield "***";
-                }
-                int first = recipient.offsetByCodePoints(0, 1);
-                String prefix = first < at ? recipient.substring(0, first) : "";
-                yield prefix + "***" + recipient.substring(at);
-            }
-            case SMS -> "***" + recipient.substring(Math.max(0, recipient.length() - 4));
-            case KAKAOTALK -> "***";
-        };
-        return masked.equals(recipient) ? "•••" : masked;
     }
 
     @Override

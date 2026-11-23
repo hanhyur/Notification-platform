@@ -27,6 +27,8 @@ spring:
           time_zone: UTC
 
 notification:
+  query:
+    cursor-signing-key: ${NOTIFICATION_QUERY_CURSOR_SIGNING_KEY:}
   dispatch:
     provider:
       connect-timeout: 2s
