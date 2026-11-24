@@ -32,7 +32,7 @@ public class JpaNotificationOutboxRepository
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public List<NotificationOutboxEvent> findPending(Instant now, int limit) {
         Objects.requireNonNull(now, "조회 기준 시각은 필수입니다.");
         if (limit < 1) {

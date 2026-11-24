@@ -42,10 +42,12 @@ public class OperatorNotificationQueryService {
                 new QueryCursors.Position(row.createdAt(), null, row.notificationId(), reference)));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public IntegrationNotificationDetail detail(UUID notificationId, UUID operatorId) {
         return history.detail(notificationId, operatorId).orElseThrow(NotificationQueryException::notFound);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public QueryPage<OperatorNotificationHistory.Attempt> attempts(UUID notificationId, int size, String token) {
         var scope = cursors.scope("attempts", notificationId);
         var after = cursors.decode(scope, token);
@@ -56,6 +58,7 @@ public class OperatorNotificationQueryService {
                 new QueryCursors.Position(null, row.attemptNo(), row.attemptId(), null)));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public QueryPage<OperatorNotificationHistory.Action> actions(UUID notificationId, int size, String token) {
         var scope = cursors.scope("actions", notificationId);
         var after = cursors.decode(scope, token);
