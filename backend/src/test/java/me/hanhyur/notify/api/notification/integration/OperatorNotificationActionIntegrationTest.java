@@ -92,7 +92,7 @@ class OperatorNotificationActionIntegrationTest {
 
     @BeforeEach
     void advanceToNewWindow() {
-        now = Instant.parse("2026-11-23T03:00:00Z").plus(Duration.ofHours(TEST_HOUR.getAndIncrement()));
+        now = Instant.parse("2026-11-23T03:00:00.123456Z").plus(Duration.ofHours(TEST_HOUR.getAndIncrement()));
         when(clock.instant()).thenReturn(now);
     }
 
@@ -117,8 +117,10 @@ class OperatorNotificationActionIntegrationTest {
         long version = failed.get("version").asLong();
         String body = retryBody(version, REASON);
         advance(10);
+        when(clock.instant()).thenReturn(now.plusNanos(789));
 
         var queued = success(send(command(id, "retries", key, body)), 202, false);
+        assertThat(success(send(command(id, "retries", key, body)), 202, true)).isEqualTo(queued);
         assertThat(queued.get("notificationId").asString()).isEqualTo(id.toString());
         assertThat(queued.get("status").asString()).isEqualTo("QUEUED");
         assertThat(queued.get("generation").asInt()).isEqualTo(generation);
@@ -165,7 +167,9 @@ class OperatorNotificationActionIntegrationTest {
         UUID key = UUID.randomUUID();
         String body = resolutionBody(unknown.get("version").asLong(), resolution, EVIDENCE);
         advance(15);
+        when(clock.instant()).thenReturn(now.plusNanos(789));
         var resolved = success(send(command(id, "resolutions", key, body)), 200, false);
+        assertThat(success(send(command(id, "resolutions", key, body)), 200, true)).isEqualTo(resolved);
         String status = resolution.equals("ACCEPTED") ? "ACCEPTED" : "FAILED";
         assertThat(resolved.get("status").asString()).isEqualTo(status);
         assertThat(resolved.get("completedAt").asString()).isEqualTo(now.toString());
