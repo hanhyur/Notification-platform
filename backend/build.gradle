@@ -44,6 +44,10 @@ tasks.named('test') {
 }
 
 tasks.named('processTestResources') {
+    from('../infra/https') {
+        include 'prepare-local-cert.sh'
+        into 'local-https'
+    }
     from('../infra/postgres') {
         include '*.sh'
         into 'postgres-replication'

@@ -1,0 +1,12 @@
+server:
+  address: 127.0.0.1
+  port: 8443
+  ssl:
+    enabled: true
+    key-store: ${LOCAL_TLS_KEYSTORE}
+    key-store-type: PKCS12
+    key-store-password: ${LOCAL_TLS_PASSWORD}
+  servlet:
+    session:
+      cookie:
+        secure: true

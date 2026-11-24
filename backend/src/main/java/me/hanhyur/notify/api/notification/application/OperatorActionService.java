@@ -6,6 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 @Service
@@ -36,7 +37,7 @@ public class OperatorActionService {
         var resultingStatus = command.resultingStatus(notification);
         command.validateAuditText(notification);
 
-        Instant now = clock.instant();
+        Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
         Instant at = now.isBefore(notification.updatedAt()) ? notification.updatedAt() : now;
         boolean retry = command.kind() == OperatorActionCommand.Kind.RETRY;
         if (retry) {
