@@ -34,7 +34,7 @@ public class JpaNotificationRepository implements NotificationRepository {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public Optional<Notification> findById(UUID notificationId) {
         Objects.requireNonNull(notificationId, "알림 식별자는 필수입니다.");
 

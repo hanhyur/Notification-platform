@@ -25,6 +25,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-flyway'
     implementation 'org.springframework.boot:spring-boot-starter-kafka'
+    implementation 'net.ttddyy:datasource-proxy:1.11.1'
 
     runtimeOnly 'org.flywaydb:flyway-database-postgresql'
     runtimeOnly 'org.postgresql:postgresql'
@@ -40,4 +41,11 @@ dependencies {
 tasks.named('test') {
     useJUnitPlatform()
     systemProperty 'loggingTestClasspath', sourceSets.test.runtimeClasspath.asPath
+}
+
+tasks.named('processTestResources') {
+    from('../infra/postgres') {
+        include '*.sh'
+        into 'postgres-replication'
+    }
 }
